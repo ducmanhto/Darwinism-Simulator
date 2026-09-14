@@ -1,0 +1,56 @@
+simulation:
+  seed: 12345
+  initial_population: 500
+  max_population: 3000
+  ticks_per_checkpoint: 1000
+
+world:
+  width: 512.0
+  height: 512.0
+  initial_plants: 9000
+  plant_energy: 28.0
+  plant_regeneration_probability: 0.004
+  carcass_decay_per_tick: 0.02
+  interaction_distance: 1.8
+  terrain_enabled: 1
+  terrain_cols: 64
+  terrain_rows: 64
+  terrain_noise_cell_span: 8
+  terrain_seed_offset: 424242
+  river_half_width: 10.0
+  desert_moisture_threshold: 0.28
+  highland_elevation_threshold: 0.72
+  river_regen_multiplier: 2.40
+  plains_regen_multiplier: 1.00
+  desert_regen_multiplier: 0.18
+  highland_regen_multiplier: 0.60
+  river_movement_multiplier: 1.20
+  plains_movement_multiplier: 1.00
+  desert_movement_multiplier: 1.15
+  highland_movement_multiplier: 1.55
+  initial_plant_fertility_bias: 0.70
+
+hardware:
+  # deterministic: hardware changes throughput only.
+  # coupled: Kubernetes cgroup CPU limit changes per-animal compute grants.
+  mode: deterministic
+  deterministic_compute_credits: 500000
+  credits_per_core: 250000
+
+evolution:
+  speciation_interval_ticks: 200
+  min_subgroup_population: 20
+  split_threshold: 0.28
+  join_threshold: 0.18
+  stability_checks: 3
+
+energy:
+  initial_energy: 110.0
+  max_energy: 180.0
+  reproduction_min_energy: 90.0
+  reproduction_contribution: 24.0
+  reproduction_cooldown: 180
+  attack_energy_cost: 1.2
+  movement_energy_per_mass: 0.025
+  brain_energy_per_credit: 0.000002
+  starvation_damage: 0.8

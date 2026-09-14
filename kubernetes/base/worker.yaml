@@ -1,0 +1,70 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: darwinsim-worker
+  namespace: darwinsim
+spec:
+  clusterIP: None
+  selector:
+    app: darwinsim-worker
+  ports:
+    - name: grpc
+      port: 50051
+      targetPort: grpc
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: darwinsim-worker
+  namespace: darwinsim
+spec:
+  serviceName: darwinsim-worker
+  replicas: 1
+  selector:
+    matchLabels:
+      app: darwinsim-worker
+  template:
+    metadata:
+      labels:
+        app: darwinsim-worker
+    spec:
+      containers:
+        - name: worker
+          image: ghcr.io/replace-me/darwinsim-backend:latest
+          imagePullPolicy: IfNotPresent
+          command: ["/src/build/darwinsim-worker"]
+          ports:
+            - name: grpc
+              containerPort: 50051
+          env:
+            - name: DARWINSIM_GRPC_PORT
+              value: "50051"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 96Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          startupProbe:
+            grpc:
+              port: 50051
+              service: darwinsim.rpc.DecisionWorker
+            periodSeconds: 2
+            failureThreshold: 15
+
+          readinessProbe:
+            grpc:
+              port: 50051
+              service: darwinsim.rpc.DecisionWorker
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+
+          livenessProbe:
+            grpc:
+              port: 50051
+              service: darwinsim.rpc.DecisionWorker
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3

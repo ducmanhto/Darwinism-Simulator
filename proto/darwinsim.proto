@@ -1,0 +1,121 @@
+syntax = "proto3";
+
+package darwinsim.rpc;
+
+message Empty {}
+
+message Vec2 {
+  double x = 1;
+  double y = 2;
+}
+
+message Genome {
+  repeated float genes = 1;
+}
+
+message Phenotype {
+  double mass = 1;
+  double max_speed = 2;
+  double attack_power = 3;
+  double defense = 4;
+  double max_health = 5;
+  double perception_radius = 6;
+  uint32 sensor_samples = 7;
+  uint32 requested_compute = 8;
+  uint32 memory_slots = 9;
+  double plant_efficiency = 10;
+  double meat_efficiency = 11;
+  uint64 maturity_age = 12;
+  double longevity_potential = 13;
+}
+
+message AnimalState {
+  Vec2 position = 1;
+  double energy = 2;
+  double health = 3;
+  uint64 age = 4;
+  uint64 reproduction_cooldown = 5;
+  bool alive = 6;
+}
+
+enum ResourceKind {
+  PLANT = 0;
+  CARCASS = 1;
+}
+
+message ObservedResource {
+     uint64 id = 1;
+     ResourceKind kind = 2;
+     Vec2 position = 3;
+     double distance = 4;
+     double energy = 5;
+ }
+
+ message ObservedAnimal {
+   uint64 id = 1;
+   uint32 species_id = 2;
+   Vec2 position = 3;
+   double distance = 4;
+   double apparent_mass = 5;
+   double health_fraction = 6;
+   double threat = 7;
+   bool mature = 8;
+ }
+
+ message DecisionInput {
+   uint64 tick = 1;
+   uint64 seed = 2;
+   uint64 animal_id = 3;
+   uint32 species_id = 4;
+   Genome genome = 5;
+   Phenotype phenotype = 6;
+   AnimalState state = 7;
+   uint32 requested_compute = 8;
+   repeated ObservedResource resources = 9;
+   repeated ObservedAnimal animals = 10;
+ }
+
+ message DecisionBatch {
+   uint64 tick = 1;
+   bool hardware_coupled = 2;
+   uint64 deterministic_compute_credits = 3;
+   uint64 credits_per_core = 4;
+   repeated DecisionInput inputs = 5;
+ }
+
+ enum ActionType {
+   REST = 0;
+   MOVE = 1;
+   EAT_PLANT = 2;
+   EAT_CARCASS = 3;
+   FLEE = 4;
+   ATTACK = 5;
+   MATE = 6;
+   EXPLORE = 7;
+ }
+
+ message Action {
+   uint64 animal_id = 1;
+   ActionType type = 2;
+  uint64 target_id = 3;
+  Vec2 destination = 4;
+  double utility = 5;
+}
+
+message ActionBatch {
+  uint64 tick = 1;
+  repeated Action actions = 2;
+  double cpu_cores = 3;
+  uint64 memory_bytes = 4;
+  uint64 available_compute_credits = 5;
+}
+
+message HealthReply {
+  bool ok = 1;
+  string hostname = 2;
+}
+
+service DecisionWorker {
+  rpc Decide(DecisionBatch) returns (ActionBatch);
+  rpc Health(Empty) returns (HealthReply);
+}

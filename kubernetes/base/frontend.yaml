@@ -1,0 +1,49 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: darwinsim-web
+  namespace: darwinsim
+spec:
+  type: LoadBalancer
+  selector:
+    app: darwinsim-web
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: darwinsim-web
+  namespace: darwinsim
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: darwinsim-web
+  template:
+    metadata:
+      labels:
+        app: darwinsim-web
+    spec:
+      containers:
+        - name: web
+          image: ghcr.io/replace-me/darwinsim-frontend:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 80
+          resources:
+            requests:
+              cpu: 20m
+              memory: 24Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 5

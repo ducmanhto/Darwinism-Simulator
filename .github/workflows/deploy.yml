@@ -1,0 +1,81 @@
+name: Deploy to AWS
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Image tag to deploy (normally a commit SHA or latest)"
+        required: true
+        default: "latest"
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment: aws-demo
+    steps:
+      - uses: actions/checkout@v7
+      - name: Configure AWS credentials with OIDC
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - name: Deploy through Systems Manager
+        shell: bash
+        env:
+          INSTANCE_ID: ${{ vars.AWS_INSTANCE_ID }}
+          IMAGE_TAG: ${{ inputs.image_tag }}
+        run: |
+          OWNER="${GITHUB_REPOSITORY_OWNER,,}"
+          REPO="$GITHUB_REPOSITORY"
+          COMMANDS=$(jq -cn \
+            --arg repo "$REPO" \
+            --arg owner "$OWNER" \
+            --arg tag "$IMAGE_TAG" \
+            '{commands:[
+               "set -euxo pipefail",
+               "cd /opt/darwinsim",
+               "git fetch --all --prune",
+               "git checkout -f origin/main",
+               "kubectl apply -k kubernetes/aws",
+               ("kubectl -n darwinsim set image statefulset/darwinsim-worker worker=ghcr.io/"+$owner+"/darwinsim-backend:"+$tag),
+               ("kubectl -n darwinsim set image deployment/darwinsim-controller controller=ghcr.io/"+$owner+"/darwinsim-backend:"+$tag),
+              ("kubectl -n darwinsim set image deployment/darwinsim-web web=ghcr.io/"+$owner+"/darwinsim-frontend:"+$tag),
+              "kubectl -n darwinsim rollout status statefulset/darwinsim-worker --timeout=300s",
+              "kubectl -n darwinsim rollout status deployment/darwinsim-controller --timeout=300s",
+              "kubectl -n darwinsim rollout status deployment/darwinsim-web --timeout=300s",
+              "kubectl -n darwinsim get pods -o wide",
+              "curl --fail --silent --show-error --retry 30 --retry-delay 2 --retry-all-errors http://127.0.0.1/healthz",
+              "curl --fail --silent --show-error --retry 30 --retry-delay 2 --retry-all-errors http://127.0.0.1/api/state >/tmp/darwinsim-state.json",
+              "curl --fail --silent --show-error http://127.0.0.1/api/terrain >/tmp/darwinsim-terrain.json",
+              "curl --fail --silent --show-error http://127.0.0.1/api/species >/tmp/darwinsim-species.json",
+
+              "jq -e \".tick >= 0 and .terrainSignature != null\" /tmp/darwinsim-state.json >/dev/null",
+              "jq -e \".signature != null and .cols > 0 and .rows > 0\" /tmp/darwinsim-terrain.json >/dev/null",
+
+              "curl --fail --silent --show-error http://127.0.0.1/ >/tmp/darwinsim-index.html",
+              "test -s /tmp/darwinsim-index.html",
+
+              "echo DarwinSim deployment smoke test passed"
+            ]}')
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --parameters "$COMMANDS" \
+            --query 'Command.CommandId' --output text)
+          echo "SSM command: $COMMAND_ID"
+          for i in $(seq 1 60); do
+            STATUS=$(aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" --query Status --output text || true)
+            echo "status=$STATUS"
+            case "$STATUS" in
+              Success) break ;;
+              Failed|Cancelled|TimedOut)
+                aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID"
+                exit 1 ;;
+            esac
+            sleep 5
+          done
+          aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" --query StandardOutputContent --output text

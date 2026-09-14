@@ -1,0 +1,26 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../base
+patches:
+  - target:
+      kind: StatefulSet
+      name: darwinsim-worker
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+  - target:
+      kind: Deployment
+      name: darwinsim-controller
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/env/2/value
+        value: "2"
+images:
+  - name: ghcr.io/replace-me/darwinsim-backend
+    newName: darwinsim-backend
+    newTag: local
+  - name: ghcr.io/replace-me/darwinsim-frontend
+    newName: darwinsim-frontend
+    newTag: local

@@ -1,0 +1,5 @@
+aws_region           = "us-west-2"
+instance_type        = "c7i-flex.large"
+github_repository    = "YOUR_GITHUB_USER/darwinsim"
+github_owner_id      = "12345678"
+github_repository_id = "123456789"

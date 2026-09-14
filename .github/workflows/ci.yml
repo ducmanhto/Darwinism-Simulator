@@ -1,0 +1,104 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  cpp:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install C++ dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build build-essential \
+            libgrpc++-dev protobuf-compiler protobuf-compiler-grpc libprotobuf-dev \
+            libsqlite3-dev libboost-system-dev
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo
+      - name: Build
+        run: cmake --build build --parallel
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+      - name: Deterministic smoke run
+        run: |
+          ./build/darwinsim-cli config/default.yaml 100 | tee /tmp/run1.txt
+          ./build/darwinsim-cli config/default.yaml 100 | tee /tmp/run2.txt
+          test "$(tail -1 /tmp/run1.txt)" = "$(tail -1 /tmp/run2.txt)"
+
+  terraform:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: hashicorp/setup-terraform@v4
+      - name: Format check
+        run: terraform fmt -check -recursive terraform
+      - name: Validate bootstrap
+        working-directory: terraform/bootstrap
+        run: terraform init -backend=false && terraform validate
+      - name: Validate main infrastructure
+        working-directory: terraform/main
+        run: terraform init -backend=false && terraform validate
+
+  containers-and-kubernetes:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build images
+        run: |
+          docker build -f docker/backend.Dockerfile -t darwinsim-backend:local .
+          docker build -f docker/frontend.Dockerfile -t darwinsim-frontend:local .
+      - name: Install k3d
+        run: curl -fsSL https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
+      - name: Create local Kubernetes cluster
+        run: k3d cluster create darwinsim-ci -p "8088:80@loadbalancer" --wait
+      - name: Import images
+        run: |
+          k3d image import darwinsim-backend:local -c darwinsim-ci
+          k3d image import darwinsim-frontend:local -c darwinsim-ci
+      - name: Deploy DarwinSim
+        run: kubectl apply -k kubernetes/local
+      - name: Wait for workloads
+        run: |
+          kubectl -n darwinsim rollout status statefulset/darwinsim-worker --timeout=180s
+          kubectl -n darwinsim rollout status deployment/darwinsim-controller --timeout=180s
+          kubectl -n darwinsim rollout status deployment/darwinsim-web --timeout=180s
+      - name: Smoke test APIs through frontend proxy
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8088/api/state >/tmp/state.json; then break; fi
+            sleep 2
+          done
+          test -s /tmp/state.json
+          curl -fsS http://127.0.0.1:8088/api/terrain >/tmp/terrain.json
+          python3 - <<'PY'
+          import json
+          state = json.load(open('/tmp/state.json'))
+          terrain = json.load(open('/tmp/terrain.json'))
+          assert state['terrainSignature'] == terrain['signature']
+          assert terrain['cols'] * terrain['rows'] == len(terrain['types'])
+          assert len(set(terrain['types'])) >= 3
+          assert max(terrain['regen']) > min(terrain['regen'])
+          PY
+      - name: Recovery test - delete worker pod
+        run: |
+          BEFORE=$(curl -fsS http://127.0.0.1:8088/api/state | python3 -c 'import json,sys; print(json.load(sys.stdin)["tick"])')
+          kubectl -n darwinsim delete pod darwinsim-worker-0
+          kubectl -n darwinsim rollout status statefulset/darwinsim-worker --timeout=180s
+          sleep 4
+          AFTER=$(curl -fsS http://127.0.0.1:8088/api/state | python3 -c 'import json,sys; print(json.load(sys.stdin)["tick"])')
+          echo "tick before=$BEFORE after=$AFTER"
+          test "$AFTER" -ge "$BEFORE"
+      - name: Diagnostics
+        if: always()
+        run: |
+          kubectl -n darwinsim get all || true
+          kubectl -n darwinsim logs deployment/darwinsim-controller --tail=100 || true
+      - name: Delete cluster
+        if: always()
+        run: k3d cluster delete darwinsim-ci || true

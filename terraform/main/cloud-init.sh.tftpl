@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -euxo pipefail
+
+export DEBIAN_FRONTEND=noninteractive
+apt-get update
+apt-get install -y curl git ca-certificates jq
+
+mkdir -p /var/lib/darwinsim-data /opt
+chmod 0755 /var/lib/darwinsim-data
+
+# K3s is the Kubernetes distribution used on the EC2 node. Traefik is not
+# needed because DarwinSim exposes only the K3s ServiceLB on port 80.
+curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--disable=traefik" sh -
+ln -sf /usr/local/bin/k3s /usr/local/bin/kubectl
+
+if [ ! -d /opt/darwinsim/.git ]; then
+   git clone https://github.com/${github_repository}.git /opt/darwinsim
+fi
+
+systemctl enable --now k3s
