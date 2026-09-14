@@ -56,7 +56,11 @@ jobs:
       - name: Install k3d
         run: curl -fsSL https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
       - name: Create local Kubernetes cluster
-        run: k3d cluster create darwinsim-ci -p "8088:80@loadbalancer" --wait
+        run: |
+          k3d cluster create darwinsim-ci \
+            -p "8088:80@loadbalancer" \
+            --k3s-arg "--disable=traefik@server:*" \
+            --wait
       - name: Import images
         run: |
           k3d image import darwinsim-backend:local -c darwinsim-ci
