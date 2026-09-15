@@ -33,3 +33,9 @@ variable "root_volume_gb" {
   type    = number
   default = 20
 }
+
+variable "github_environment" {
+  description = "GitHub Actions environment allowed to assume the AWS deployment role."
+  type        = string
+  default     = "aws-demo"
+}
