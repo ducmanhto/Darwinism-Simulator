@@ -36,13 +36,16 @@ jobs:
             --arg owner "$OWNER" \
             --arg tag "$IMAGE_TAG" \
             '{commands:[
-               "set -eux",
-               "cd /opt/darwinsim",
-               "git fetch --all --prune",
-               "git checkout -f origin/main",
-               "kubectl apply -k kubernetes/aws",
-               ("kubectl -n darwinsim set image statefulset/darwinsim-worker worker=ghcr.io/"+$owner+"/darwinsim-backend:"+$tag),
-               ("kubectl -n darwinsim set image deployment/darwinsim-controller controller=ghcr.io/"+$owner+"/darwinsim-backend:"+$tag),
+              "set -eux",
+              "mkdir -p /opt",
+              ("if [ ! -d /opt/darwinsim/.git ]; then rm -rf /opt/darwinsim && git clone https://github.com/"+$repo+".git /opt/darwinsim; fi"),
+              "cd /opt/darwinsim",
+              ("git remote set-url origin https://github.com/"+$repo+".git"),
+              "git fetch --all --prune",
+              "git checkout -B main origin/main",
+              "kubectl apply -k kubernetes/aws",
+              ("kubectl -n darwinsim set image statefulset/darwinsim-worker worker=ghcr.io/"+$owner+"/darwinsim-backend:"+$tag),
+              ("kubectl -n darwinsim set image deployment/darwinsim-controller controller=ghcr.io/"+$owner+"/darwinsim-backend:"+$tag),
               ("kubectl -n darwinsim set image deployment/darwinsim-web web=ghcr.io/"+$owner+"/darwinsim-frontend:"+$tag),
               "kubectl -n darwinsim rollout status statefulset/darwinsim-worker --timeout=300s",
               "kubectl -n darwinsim rollout status deployment/darwinsim-controller --timeout=300s",
