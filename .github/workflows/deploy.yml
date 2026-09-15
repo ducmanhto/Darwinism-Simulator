@@ -36,7 +36,7 @@ jobs:
             --arg owner "$OWNER" \
             --arg tag "$IMAGE_TAG" \
             '{commands:[
-               "set -euxo pipefail",
+               "set -eux",
                "cd /opt/darwinsim",
                "git fetch --all --prune",
                "git checkout -f origin/main",
