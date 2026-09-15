@@ -47,6 +47,7 @@ jobs:
               ("sed -i \"s#ghcr.io/replace-me/darwinsim-backend:latest#ghcr.io/"+$owner+"/darwinsim-backend:"+$tag+"#g; s#ghcr.io/replace-me/darwinsim-frontend:latest#ghcr.io/"+$owner+"/darwinsim-frontend:"+$tag+"#g\" /tmp/darwinsim-rendered.yaml"),
               "grep -n \"image:\" /tmp/darwinsim-rendered.yaml",
               "kubectl apply -f /tmp/darwinsim-rendered.yaml",
+              "kubectl -n darwinsim delete pod darwinsim-worker-0 --ignore-not-found=true",
               "kubectl -n darwinsim rollout status statefulset/darwinsim-worker --timeout=300s",
               "kubectl -n darwinsim rollout status deployment/darwinsim-controller --timeout=300s",
               "kubectl -n darwinsim rollout status deployment/darwinsim-web --timeout=300s",
